@@ -8,8 +8,9 @@ import ocrspace
 from dotenv import load_dotenv,set_key
 load_dotenv()
 
-myname = "@ipoopmostly"
-magicw = "ocrplz"
+myname    = "@ipoopmostly"
+magicw    = "ocrplz"
+thankstxt = "Service is able to run with the kind help of pythonanywhere.com @pythonanywhere"
 
 class ocrbot:
     def __init__(self):
@@ -22,12 +23,6 @@ class ocrbot:
         auth.set_access_token(     os.getenv('ACCESS_TOKEN'), os.getenv('ACCESS_TOKEN_SECRET'))
         return tweepy.API(auth)
 
-    def post_tweet(self,contents="OCRBot empty message"):
-        # api = setup_api()
-        tweet = contents
-        status = self.api.update_status(status=tweet)
-        return 1
-
     def OCRImage(self,imageUrl):
         ocrResult    = self.ocr_api.ocr_url(imageUrl)
         tweetsToSend = Splitter.forTweets(ocrResult) # tweet length limits (280-8-15) user name and brackets
@@ -35,7 +30,7 @@ class ocrbot:
 
     def find_new_tasks(self):
         if self.myLastRun!=0:
-            myMentions = self.api.mentions_timeline(since_id=self.myLastRun) # Have to store last run to stop repeated interactions [since_id][, max_id][, count])
+            myMentions = self.api.mentions_timeline(since_id=self.myLastRun) 
         else:
             myMentions = self.api.mentions_timeline()
 
@@ -48,12 +43,11 @@ class ocrbot:
 
             splittext = mention.text.split()
             if not(myname in splittext and magicw in splittext):
-                print("Tweet failed on inclusion criteria") #### <<<< This fails with multiple people in the thread - must do it better
-                print(mention.text.split()[1:3])
+                print("Tweet failed on inclusion criteria {}".format(mention.id))
                 continue
 
             # print("Requestor {}\n Original Tweet Author {}\n Original Tweet {}\n".format(mention.author,mention.in_reply_to_screen_name,mention.in_reply_to_status_id))
-            requestor = mention.author
+            requestor         = mention.author
             subjectAuthor_str = mention.in_reply_to_screen_name
             subjectTweetId    = mention.in_reply_to_status_id
             # mention.author is object of Requestor
@@ -84,7 +78,8 @@ class ocrbot:
                     except Exception as e:
                         print("Failed {}".format(e))
                         # pass
-
+                    # Add thanks
+                    self.api.update_status(status=thankstxt, in_reply_to_status_id = chainTo)
 
 
 if __name__ == '__main__':
