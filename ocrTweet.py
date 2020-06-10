@@ -46,7 +46,8 @@ class ocrbot:
                 set_key(".env","LAST_RUN",str(mention.id))
                 self.myLastRun=mention.id
 
-            if mention.text.split()[1:3] != [myname, magicw]:
+            splittext = mention.text.split()
+            if not(myname in splittext and magicw in splittext):
                 print("Tweet failed on inclusion criteria") #### <<<< This fails with multiple people in the thread - must do it better
                 print(mention.text.split()[1:3])
                 continue
