@@ -4,6 +4,8 @@ import sys
 import tweepy
 from splitter import Splitter
 import ocrspace
+import time
+from random import random
 
 from dotenv import load_dotenv,set_key
 load_dotenv()
@@ -30,6 +32,7 @@ class ocrbot:
         # Call ocr.space API, wait and return list of tweets
         ocrResult    = self.ocr_api.ocr_url(imageUrl)
         tweetsToSend = Splitter.forTweets(ocrResult) # tweet length limits (280-8-15) user name and brackets
+        print(" Tweet chain length {}".format(len(tweetsToSend)))
         return tweetsToSend
 
     def find_new_tasks(self):
@@ -80,6 +83,7 @@ class ocrbot:
                     ##
                     # Try to send each tweet in the chain
                     try:
+                        print("{}.".format(i), end="")
                         if i==0:
                             # First tweet must tag the requestor
                             newTweet = self.api.update_status(status=("@{} ".format(requestor.screen_name)+tweety), in_reply_to_status_id = chainTo )
@@ -95,6 +99,7 @@ class ocrbot:
                     except Exception as e:
                         print("Failed {}".format(e))
                         # pass
+                    time.sleep(random()) # random sleep so we appear a *tiny* bit less bot-y
                     # Add thanks tweet
                     self.api.update_status(status=thankstxt, in_reply_to_status_id = chainTo)
 
