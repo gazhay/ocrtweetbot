@@ -17,7 +17,11 @@ magicw    = os.getenv('TWITTER_MW') # # Phrase that must be present to perform o
 DEBUG     = False
 DontPost  = False
 
-useThanks = (DEBUG)?False:True
+if DEBUG:
+    useThanks = False
+else:
+    useThanks = True
+
 thankstxt = "Service is able to run with the kind help of pythonanywhere.com @pythonanywhere"
 
 class ocrbot:
