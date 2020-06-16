@@ -3,23 +3,32 @@ import os
 import sys
 import tweepy
 from splitter import Splitter
-import ocrspace
+from ocrspace import API
 import time
 from random import random
 
 from dotenv import load_dotenv,set_key
 load_dotenv()
 
-myname    = "@ocrbot1" # Twitter account screenname prefixed with @
-magicw    = "ocrplz"   # Phrase that must be present to perform ocr
+myname    = os.getenv('TWITTER_SN') # # Twitter account screenname prefixed with @
+magicw    = os.getenv('TWITTER_MW') # # Phrase that must be present to perform ocr
 # Messgaes to sponsors & thanks
+
+DEBUG     = False
+DontPost  = False
+
+useThanks = (DEBUG)?False:True
 thankstxt = "Service is able to run with the kind help of pythonanywhere.com @pythonanywhere"
 
 class ocrbot:
     def __init__(self):
         # Setup the API for Twitter, ocr.space and try to find a previous run env var
         self.api       = self.setup_api()
-        self.ocr_api   = ocrspace.API(os.getenv('OCR_KEY'))
+        ocrParams      = {
+            'detectOrientation':"true",
+            'scale'            :"true"
+        }
+        self.ocr_api   = API(api_key=os.getenv('OCR_KEY'), language='eng', **ocrParams)
         self.myLastRun = int(os.getenv("LAST_RUN",default=0))
 
     def setup_api(self):
@@ -68,22 +77,29 @@ class ocrbot:
             # Get the EXTENDED version of the tweet
             subjectTweet = self.api.get_status(subjectTweetId, include_entities=True, tweet_mode='extended')
             # Drill into any media
-            media = subjectTweet.entities.get('media', [])
+            # if DEBUG: print(subjectTweet)
+            media = subjectTweet.extended_entities.get('media', []) ## Fixes #5, entities did not include all images
             for img in media:
                 if img["type"]=="photo":
                     mediaFound.append(img["media_url"])
                 else:
                     print("ignoring {} as not photo".format(img))
 
+            if DEBUG: print("  {} Found {} images".format(subjectTweetId, len(mediaFound)))
             # Tweeting will be in a chain,so we need to start the chain from original tweet
             chainTo = mention.id;
             for task in mediaFound:
                 # send image for OCR and get back a list of tweets
-                for i,tweety in enumerate(self.OCRImage(task)):
+                if DEBUG: print(" {} OCR image {}".format(subjectTweetId, task))
+                try:
+                    for i,tweety in enumerate(self.OCRImage(task)):
                     ##
                     # Try to send each tweet in the chain
-                    try:
-                        print("{}.".format(i), end="")
+                        # FIX : #5
+                        # Chain to will be last tweet in a chain for a given image, but first tweet of new image is probably "@" wrong person.
+                        if DEBUG: print("  {}.".format(i), end="")
+                        if DontPost:
+                            continue
                         if i==0:
                             # First tweet must tag the requestor
                             newTweet = self.api.update_status(status=("@{} ".format(requestor.screen_name)+tweety), in_reply_to_status_id = chainTo )
@@ -96,13 +112,15 @@ class ocrbot:
                         else:
                             newTweet = self.api.update_status(status=(tweety)                                     , in_reply_to_status_id = chainTo )
                         chainTo = newTweet.id
-                    except Exception as e:
-                        print("Failed {}".format(e))
-                        # pass
                     time.sleep(random()) # random sleep so we appear a *tiny* bit less bot-y
-                    # Add thanks tweet
-                    self.api.update_status(status=thankstxt, in_reply_to_status_id = chainTo)
 
+                except Exception as e:
+                    print("Failed OCR : {}".format(e))
+                        # pass
+            # Add thanks tweet
+            # FIXES : #4
+            if useThanks:
+                self.api.update_status(status=thankstxt, in_reply_to_status_id = chainTo)
 
 if __name__ == '__main__':
     OCR = ocrbot()
