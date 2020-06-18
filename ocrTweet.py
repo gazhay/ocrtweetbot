@@ -7,6 +7,8 @@ from ocrspace import API
 import time
 from random import random
 
+import re
+
 from dotenv import load_dotenv,set_key
 load_dotenv()
 
@@ -14,14 +16,13 @@ myname    = os.getenv('TWITTER_SN') # # Twitter account screenname prefixed with
 magicw    = os.getenv('TWITTER_MW') # # Phrase that must be present to perform ocr
 # Messgaes to sponsors & thanks
 
-DEBUG     = False
+DEBUG     = True
 DontPost  = False
 
 if DEBUG:
     useThanks = False
 else:
     useThanks = True
-
 thankstxt = "Service is able to run with the kind help of pythonanywhere.com @pythonanywhere"
 
 class ocrbot:
@@ -32,22 +33,20 @@ class ocrbot:
             'detectOrientation':"true",
             'scale'            :"true"
         }
-        self.ocr_api   = API(api_key=os.getenv('OCR_KEY'), language='eng', **ocrParams)
-        self.myLastRun = int(os.getenv("LAST_RUN",default=0))
-
+        self.ocr_api    = API(api_key=os.getenv('OCR_KEY'), language='eng', **ocrParams)
+        self.myLastRun  = int(os.getenv("LAST_RUN",default=0))
+        self.unameregex = re.compile(r'@([A-Za-z0-9_]+)')
     def setup_api(self):
         # Create OAuth link to twitter
         auth = tweepy.OAuthHandler(os.getenv('CONSUMER_KEY'), os.getenv('CONSUMER_SECRET')    )
         auth.set_access_token(     os.getenv('ACCESS_TOKEN'), os.getenv('ACCESS_TOKEN_SECRET'))
         return tweepy.API(auth)
-
     def OCRImage(self,imageUrl):
         # Call ocr.space API, wait and return list of tweets
         ocrResult    = self.ocr_api.ocr_url(imageUrl)
         tweetsToSend = Splitter.forTweets(ocrResult) # tweet length limits (280-8-15) user name and brackets
         print(" Tweet chain length {}".format(len(tweetsToSend)))
         return tweetsToSend
-
     def find_new_tasks(self):
         # If we have run before, only look for tweets since last run
         if self.myLastRun!=0:
@@ -70,19 +69,29 @@ class ocrbot:
                 # We didn't find a correct request so move along
                 continue
 
-            # print("Requestor {}\n Original Tweet Author {}\n Original Tweet {}\n".format(mention.author,mention.in_reply_to_screen_name,mention.in_reply_to_status_id))
-            requestor         = mention.author                      # User obj of requestor
-            subjectAuthor_str = mention.in_reply_to_screen_name     # Screen name of target tweet author
-            subjectTweetId    = mention.in_reply_to_status_id       # Target tweet id
+            # Setup some variables
+            requestor          = mention.author                      # User obj of requestor
+            subjectAuthor_str  = mention.in_reply_to_screen_name     # Screen name of target tweet author
+            subjectTweetId     = mention.in_reply_to_status_id       # Target tweet id
 
             # Generate empty list to hold all found images
-            mediaFound = []
+            mediaFound         = []
             print("Seeking tweet {}".format(subjectTweetId))
             # Get the EXTENDED version of the tweet
-            subjectTweet = self.api.get_status(subjectTweetId, include_entities=True, tweet_mode='extended')
-            # Drill into any media
-            # if DEBUG: print(subjectTweet)
-            media = subjectTweet.extended_entities.get('media', []) ## Fixes #5, entities did not include all images
+            subjectTweet       = self.api.get_status(subjectTweetId, include_entities =True, tweet_mode ='extended', trim_user =True)
+            # Find everyone involved in the tweetchain
+            # Leaving this code for future use
+            #            # initialList = re.findall(self.unameregex, mention.text)
+            #            # initialList.append(requestor.screen_name)
+            #            # initialList.append(subjectAuthor_str)
+            #            # conversationalists = "@"+(" @".join(list(set(initialList)))) #### << CHECK
+
+            #
+            conversationalists = "@{}".format(requestor.screen_name)
+            # print("-- Users in this converation")
+            if DEBUG: print(conversationalists)
+
+            media              = subjectTweet.extended_entities.get('media', []) ## Fixes #5, entities did not include all images
             for img in media:
                 if img["type"]=="photo":
                     mediaFound.append(img["media_url"])
@@ -93,9 +102,9 @@ class ocrbot:
             # Tweeting will be in a chain,so we need to start the chain from original tweet
             chainTo = mention.id;
             for task in mediaFound:
-                # send image for OCR and get back a list of tweets
                 if DEBUG: print(" {} OCR image {}".format(subjectTweetId, task))
                 try:
+                    # send image for OCR and get back a list of tweets
                     for i,tweety in enumerate(self.OCRImage(task)):
                     ##
                     # Try to send each tweet in the chain
@@ -104,23 +113,22 @@ class ocrbot:
                         if DEBUG: print("  {}.".format(i), end="")
                         if DontPost:
                             continue
-                        if i==0:
-                            # First tweet must tag the requestor
-                            newTweet = self.api.update_status(status=("@{} ".format(requestor.screen_name)+tweety), in_reply_to_status_id = chainTo )
-                        elif i%24==0:
+                        # if i==0:
+                        #     # First tweet must tag the requestor
+                        #     # newTweet = self.api.update_status(status=("@{} ".format(requestor.screen_name)+tweety), in_reply_to_status_id = chainTo )
+                        #     newTweet = self.api.update_status(status=("{} {}".format(conversationalists, tweety)) , in_reply_to_status_id = chainTo )
+                        if i%24==0 and i>0:
                             # create new quote tweet
-                            newTweet = self.api.update_status(status="https://twitter.com/{}/status/{}".format(myname, chainTo))
+                            newTweet = self.api.update_status(status="{} https://twitter.com/{}/status/{}".format(conversationalists, myname, chainTo))
                             chainTo  = newTweet.id
                             # Continue as thread to that
-                            newTweet = self.api.update_status(status=(tweety)                                     , in_reply_to_status_id = chainTo )
+                            newTweet = self.api.update_status(status=("{} {}".format(conversationalists, tweety)) , in_reply_to_status_id = chainTo )
                         else:
-                            newTweet = self.api.update_status(status=(tweety)                                     , in_reply_to_status_id = chainTo )
+                            newTweet = self.api.update_status(status=("{} {}".format(conversationalists, tweety)) , in_reply_to_status_id = chainTo )
                         chainTo = newTweet.id
                     time.sleep(random()) # random sleep so we appear a *tiny* bit less bot-y
-
                 except Exception as e:
-                    print("Failed OCR : {}".format(e))
-                        # pass
+                    print("Failed OCR/Posting : {}".format(e))
             # Add thanks tweet
             # FIXES : #4
             if useThanks:
