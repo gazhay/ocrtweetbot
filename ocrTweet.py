@@ -8,8 +8,6 @@ import time
 from random import random
 
 import re
-# patching
-import types
 
 from dotenv import load_dotenv,set_key
 load_dotenv()
@@ -27,25 +25,6 @@ else:
     useThanks = True
 thankstxt = "Service is able to run with the kind help of pythonanywhere.com @pythonanywhere"
 
-# Tweepy 3.9 function from future
-def create_media_metadata(self, media_id, alt_text, *args, **kwargs):
-        """ :reference: https://developer.twitter.com/en/docs/media/upload-media/api-reference/post-media-metadata-create
-            :allowed_param:
-        """
-        kwargs['json_payload'] = {
-            'media_id': media_id,
-            'alt_text': {'text': alt_text}
-        }
-
-        return bind_api(
-            api=self,
-            path='/media/metadata/create.json',
-            method='POST',
-            allowed_param=[],
-            require_auth=True,
-            upload_api=True
-        )(*args, **kwargs)
-
 class ocrbot:
     def __init__(self):
         # Setup the API for Twitter, ocr.space and try to find a previous run env var
@@ -57,11 +36,6 @@ class ocrbot:
         self.ocr_api    = API(api_key=os.getenv('OCR_KEY'), language='eng', **ocrParams)
         self.myLastRun  = int(os.getenv("LAST_RUN",default=0))
         self.unameregex = re.compile(r'@([A-Za-z0-9_]+)')
-        # Tweepy 3.9 has a function we want but author won't release it just yet.
-        try:
-            self.api.create_media_metadata()
-        except AttributeError:
-            self.api.create_media_metadata = types.MethodType( create_media_metadata, self )
     def setup_api(self):
         # Create OAuth link to twitter
         auth = tweepy.OAuthHandler(os.getenv('CONSUMER_KEY'), os.getenv('CONSUMER_SECRET')    )
@@ -143,29 +117,22 @@ class ocrbot:
                         #     # First tweet must tag the requestor
                         #     # newTweet = self.api.update_status(status=("@{} ".format(requestor.screen_name)+tweety), in_reply_to_status_id = chainTo )
                         #     newTweet = self.api.update_status(status=("{} {}".format(conversationalists, tweety)) , in_reply_to_status_id = chainTo )
-                        try:
-                            if i%24==0 and i>0:
-                                # create new quote tweet
-                                newTweet = self.api.update_status(status="{} https://twitter.com/{}/status/{}".format(conversationalists, myname, chainTo))
-                                chainTo  = newTweet.id
-                                # Continue as thread to that
-                                newTweet = self.api.update_status(status=("{} {}".format(conversationalists, tweety)) , in_reply_to_status_id = chainTo, auto_populate_reply_metadata=True )
-                            else:
-                                newTweet = self.api.update_status(status=("{} {}".format(conversationalists, tweety)) , in_reply_to_status_id = chainTo, auto_populate_reply_metadata=True )
-                            chainTo = newTweet.id
-                        except Exception as e:
-                            print("Failed posting : {}".format(e))
+                        if i%24==0 and i>0:
+                            # create new quote tweet
+                            newTweet = self.api.update_status(status="{} https://twitter.com/{}/status/{}".format(conversationalists, myname, chainTo))
+                            chainTo  = newTweet.id
+                            # Continue as thread to that
+                            newTweet = self.api.update_status(status=("{} {}".format(conversationalists, tweety)) , in_reply_to_status_id = chainTo )
+                        else:
+                            newTweet = self.api.update_status(status=("{} {}".format(conversationalists, tweety)) , in_reply_to_status_id = chainTo )
+                        chainTo = newTweet.id
                     time.sleep(random()) # random sleep so we appear a *tiny* bit less bot-y
                 except Exception as e:
-                    print("Failed OCR : {}".format(e))
-                    try:
-                        self.api.update_status(status=("{} Sorry, the optical character recognition failed on this tweet.".format(conversationalists)) , in_reply_to_status_id = chainTo, auto_populate_reply_metadata=True )
-                    except Exception as e:
-                        print("Failed explaining OCR failure : {}".format(e))
+                    print("Failed OCR/Posting : {}".format(e))
             # Add thanks tweet
             # FIXES : #4
             if useThanks:
-                self.api.update_status(status=thankstxt, in_reply_to_status_id = chainTo, auto_populate_reply_metadata=True)
+                self.api.update_status(status=thankstxt, in_reply_to_status_id = chainTo)
 
 if __name__ == '__main__':
     OCR = ocrbot()
