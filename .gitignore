@@ -1,5 +1,0 @@
-.env
-.env-deploy
-__pycache__
-venv
-getTweet.py
