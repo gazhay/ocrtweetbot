@@ -3,7 +3,7 @@
 A simple bot which attempts to OCR images and tweet the resulting text as a thread.
 
 ## Dependencies
-tweepy
+tweepy3.9
 python-dotenv
 ~~ocrspace~~
 
