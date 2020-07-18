@@ -32,7 +32,18 @@ MAGIC PHRASE is something like "ocrplz".
 
 Then run the script at whatever intervals the APIs will allow you.
 
+## ocrTweet version of the bot
+
 The bot looks through its mentions from the last seen mention, if it finds the magic keyword it will attempt to find images, ocr them and send replies to whoever requested the bot to work with the text it finds.
+
+## ocrStream version of the bot
+
+This bot is an "always-on" version of the bot. It works in exactly the same way as the single run bot, but makes use of Tweepy stream features.
+By default it registers both TWITTER_SN and TWITTER_MW as filter conditions to grab tweets.
+
+I would imagine this version will hit rate limits all over the place - especially on free plans.
+
+## Disclaimers
 
 This is **alpha** quality work. It does *enough* to work in the narrow cases it has been tested with. (@theousherwood tweets and one from the poke).
 
@@ -44,4 +55,4 @@ It would be good if twitter would go beyond their current model of opt-in image 
 
 # Out in the wild
 
-It is currently running on the account @ocrbot1 on twitter.
+It is currently running on the account @ocrbot1 on twitter. With the great help of pythonanywhere @pythonanywhere
