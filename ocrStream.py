@@ -1,23 +1,19 @@
 # -*- coding: utf-8 -*-
-import os
-import sys
+import os,sys,time,re
 import tweepy
+
 from splitter import Splitter
 from ocrspace import API
-import time
-from random import random
+from random   import random
 
-import re
-# patching
-import types
-
-from dotenv import load_dotenv,set_key
+from dotenv   import load_dotenv,set_key
 load_dotenv()
 
 MYNAME    = os.getenv('TWITTER_SN') # # Twitter account screenname prefixed with @
 MAGICW    = os.getenv('TWITTER_MW') # # Phrase that must be present to perform ocr
 
 PENALTY_TIME = 60
+PENALTY_INCR = 60
 
 # Messgaes to sponsors & thanks
 DEBUG     = True
@@ -33,8 +29,9 @@ class ocrbot_stream(tweepy.StreamListener):
 
     def local_init(     self ):
         ocrParams      = {
-            'detectOrientation':"true",
-            'scale'            :"true"
+            'detectOrientation': "true",
+            'scale'            : "true",
+            'OCREngine'        : 2
         }
         self.ocr_api        = API(api_key=os.getenv('OCR_KEY'), language='eng', **ocrParams)
         self.myLastRun      = int(os.getenv("LAST_RUN",default = 0))
@@ -49,7 +46,8 @@ class ocrbot_stream(tweepy.StreamListener):
             tweetsToSend = Splitter.forTweets(ocrResult, splitLength=splitLength) # tweet length limits (280-8-15) user name and brackets
         else:
             tweetsToSend = Splitter.forTweets(ocrResult)
-        print(" Tweet chain length {}".format(len(tweetsToSend)))
+        if DEBUG:
+            print(" Tweet chain length {}".format(len(tweetsToSend)))
         return tweetsToSend
     def find_images(    self, collection): # ////////////////////////////////////////////////////////
         mediaFound = []
@@ -57,7 +55,8 @@ class ocrbot_stream(tweepy.StreamListener):
             if img["type"]=="photo":
                 mediaFound.append(img["media_url"])
             else:
-                print("ignoring {} as not photo".format(img))
+                if DEBUG:
+                    print("ignoring {} as not photo".format(img))
 
         if DEBUG: print(" >> Found {} images".format(len(mediaFound)))
         return mediaFound
@@ -98,7 +97,7 @@ class ocrbot_stream(tweepy.StreamListener):
         subjectAuthor_str  = mention.in_reply_to_screen_name     # Screen name of target tweet author
         subjectTweetId     = mention.in_reply_to_status_id       # Target tweet id
 
-        print("Seeking tweet {}".format(subjectTweetId))
+        print("tweet {}".format(subjectTweetId))
         subjectTweet       = self.api.get_status(subjectTweetId, include_entities =True, tweet_mode ='extended', trim_user =True)
         conversationalists = "@{}".format(requestor.screen_name)
         if DEBUG: print(conversationalists)
@@ -108,7 +107,8 @@ class ocrbot_stream(tweepy.StreamListener):
         chainTo    = mention.id;
         for task in mediaFound:
             if DEBUG: print(" {} OCR image {}".format(subjectTweetId, task))
-            self.ocr2tweets( task, conversationalists, chainTo )
+            result = self.ocr2tweets( task, conversationalists, chainTo )
+            if DEBUG: print(" {} ".format(result))
     def on_error(       self, status_code):
         if status_code == 420:
             # This is a rate warning and we will have been limited
@@ -116,6 +116,7 @@ class ocrbot_stream(tweepy.StreamListener):
             # So we need to sleep for a while here
             print( "Going into the penalty box for {} secs {}".format(PENALTY_TIME,time.strftime("%H:%M:%S", time.localtime())) )
             time.sleep(PENALTY_TIME)
+            PENALTY_TIME = PENALTY_TIME + PENALTY_INCR
             #returning False in on_error disconnects the stream
             # return False
             pass
